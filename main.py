@@ -25,7 +25,7 @@ def create_table(conn, name):
         cur.execute("""
               CREATE TABLE IF NOT EXISTS telephones(
                 id SERIAL PRIMARY KEY,
-                telephone_num varchar(10),
+                telephone_num varchar(20),
                 client_id INTEGER NOT NULL REFERENCES "%s"(id)
             );
               """, (name,))
@@ -37,21 +37,21 @@ def create_table(conn, name):
 def create_user(conn, name, lastname, email, tel_num):
 
     with conn.cursor() as cur:
-        cur.execute(f"""
-          INSERT INTO Clients (first_name, last_name, email) 
-          VALUES ({name}, {lastname}, {email}) RETURNING id, first_name, last_name, email;
-              """)
-        print(cur.fetchone())
+        cur.execute("""
+          INSERT INTO "'Clients'" (first_name, last_name, email) 
+          VALUES ("%s", "%s", "%s") RETURNING id;
+              """, (name, lastname, email ))
+        i = cur.fetchone()
 
         if tel_num != '':
             cur.execute("""
-              INSERT INTO telephones(telephone_num, client_id) 
+              INSERT INTO "'telephones'" (telephone_num, client_id) 
           VALUES("%s", "%s");
               """, (tel_num, i))
 
         print(cur.fetchone())
 
-def add_tel_num(conn, id: int, tel_num: str) -> int:
+def add_tel_num(conn, id, tel_num):
     with conn.cursor() as cur:
         if tel_num != '':
             cur.execute("""
@@ -59,7 +59,7 @@ def add_tel_num(conn, id: int, tel_num: str) -> int:
           VALUES("%s", "%s");
               """, (tel_num, id))
 
-        return cur.fetchone()[0]
+        return cur.fetchone()
 
 def change_data(conn, id: int, email: str) -> int:
     with conn.cursor() as cur:
@@ -117,7 +117,9 @@ if __name__ == '__main__':
         print('Clients_id', python_id)
         conn.commit()
 
-        python_id = create_user(conn, "Ivan", "Petrov", "test@test.ru", "+79111234567")
+    #    python_id = create_user(conn, "Ivan", "Petrov", "test@test.ru", "+79111234567")
+        python_id = create_user(conn, 1, 2, 3, 4)
+
         print('Clients_insert', python_id)
         conn.commit()
 
