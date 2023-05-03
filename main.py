@@ -1,108 +1,166 @@
 import psycopg2
+from psycopg2 import sql
 import configparser
 
 
-def create_table(conn, name):
-    with conn.cursor() as cur:
-        cur.execute("""
-              DROP TABLE IF  EXISTS Clients;
-              DROP TABLE IF  EXISTS telephones;
-              """)
-        cur.execute("""
-          CREATE TABLE IF NOT EXISTS "%s"(
+def create_table(cur, name):
+    # cur.execute("""
+    #           DROP TABLE IF  EXISTS Clients;
+    #           DROP TABLE IF  EXISTS telephones;
+    #           """)
+    stmt = sql.SQL("""
+          CREATE TABLE IF NOT EXISTS {name}(
             id SERIAL PRIMARY KEY,
             first_name varchar(60)NOT NULL,
             last_name varchar(60)NOT NULL,
             email varchar(60)
-            );""", (name,))
-        conn.commit()
+            )
+            """).format(
+        name = sql.Identifier(name),
+                       )
+    cur.execute(stmt)
 
     # cur.execute("""
-    #          INSERT INTO Clients (first_name, last_name, email)
-    #          VALUES ("Dima", "Dmitrov", "1@1.ru");
-    #                 """)
+    #       CREATE TABLE IF NOT EXISTS %s(
+    #         id SERIAL PRIMARY KEY,
+    #         first_name varchar(60)NOT NULL,
+    #         last_name varchar(60)NOT NULL,
+    #         email varchar(60)
+    #         )
+    #         """, (name,))
+    conn.commit()
 
-        cur.execute("""
+    cur.execute("""
+           INSERT INTO Clients (first_name, last_name, email)
+           VALUES ('Dima', 'Dmitrov', '1@1.ru');
+                  """)
+
+    cur.execute("""
               CREATE TABLE IF NOT EXISTS telephones(
                 id SERIAL PRIMARY KEY,
                 telephone_num varchar(20),
-                client_id INTEGER NOT NULL REFERENCES "%s"(id)
+                client_id INTEGER NOT NULL REFERENCES Clients(id)
             );
-              """, (name,))
-        conn.commit()
+              """)
+    conn.commit()
 
 
 
 
-def create_user(conn, name, lastname, email, tel_num):
+def create_user(cur, name, lastname, email, tel_num):
 
-    with conn.cursor() as cur:
+        #cursor.execute("SELECT admin FROM users WHERE username = %s'", (username,));
+        #cursor.execute("SELECT admin FROM users WHERE username = %(username)s", {'username': username});
+   # cur.execute("""
+        #   INSERT INTO Clients (first_name, last_name, email)
+        #   VALUES (%(name)s, %(lastname)s1, %(email)s2) RETURNING id
+        #       """, {'name': name}, {'lastname': lastname}, {'email': email});
+
+        # stmt = sql.SQL("""
+        #       CREATE TABLE IF NOT EXISTS {name}(
+        #         id SERIAL PRIMARY KEY,
+        #         first_name varchar(60)NOT NULL,
+        #         last_name varchar(60)NOT NULL,
+        #         email varchar(60)
+        #         )
+        #         """).format(
+        #     name=sql.Identifier(name),
+        # )
+        # cur.execute(stmt)
+
+
+    # stmt = sql.SQL("""
+    # INSERT INTO Clients(first_name, last_name, email)
+    #       VALUES ({name}, {lastname}, {email}) RETURNING id;
+    #                       """).format(
+    #         name, lastname, email = sql.Identifier(name, lastname, email),
+    # )
+    # cur.execute(stmt)
+    cur.execute("""INSERT INTO Clients(first_name, last_name, email) VALUES(%s, %s, %s) RETURNING id;""", (name, lastname, email))
+
+    # cur.execute("""
+    #       INSERT INTO Clients (first_name, last_name, email)
+    #       VALUES (%s, %s, %s) RETURNING id;
+    #           """, (name, lastname, email))
+    i = cur.fetchone()
+
+    if tel_num != '':
         cur.execute("""
-          INSERT INTO "'Clients'" (first_name, last_name, email) 
-          VALUES ("%s", "%s", "%s") RETURNING id;
-              """, (name, lastname, email ))
-        i = cur.fetchone()
+          INSERT INTO telephones (telephone_num, client_id) 
+          VALUES(%s, %s);
+          """, (tel_num, i))
 
-        if tel_num != '':
-            cur.execute("""
-              INSERT INTO "'telephones'" (telephone_num, client_id) 
-          VALUES("%s", "%s");
-              """, (tel_num, i))
+    print(f'указан телефон {tel_num} для ID {i}')
+    return i
 
-        print(cur.fetchone())
+def add_tel_num(cur, id, tel_num):
+    if tel_num != '':
+        cur.execute("""INSERT INTO telephones(telephone_num, client_id) VALUES(%s, %s);""", (tel_num, id))
 
-def add_tel_num(conn, id, tel_num):
-    with conn.cursor() as cur:
-        if tel_num != '':
-            cur.execute("""
-              INSERT INTO telephones(telephone_num, client_id) 
-          VALUES("%s", "%s");
-              """, (tel_num, id))
+    #return cur.fetchone()
 
-        return cur.fetchone()
-
-def change_data(conn, id: int, email: str) -> int:
-    with conn.cursor() as cur:
-        if email != '':
-            cur.execute("""
-              UPDATE Clients SET email="%s" WHERE id=%s;
-              """, (id, email))
-
-        return cur.fetchone()[0]
-
-def del_telephone(conn, id: int) -> int:
-    with conn.cursor() as cur:
+def change_data(cur, id: int, name='', lastname='', email='', telnum=''):
+    s=''
+    if email != '':
         cur.execute("""
-              DELETE FROM telephones WHERE client_id="%s";
-              """, (id))
-
-        return cur.fetchone()[0]
-
-
-def del_user(conn, id: int) -> int:
-    with conn.cursor() as cur:
+              UPDATE Clients SET email=%s WHERE id=%s;
+              """, (email, id))
+        s += ' новый email: '+(email)
+    if lastname != '':
         cur.execute("""
-              DELETE FROM telephones WHERE client_id="%s";
-              """, (id))
-
+                      UPDATE Clients SET last_name=%s WHERE id=%s;
+                      """, (lastname, id))
+        s += ' новая фамилия: '+(lastname)
+    if name != '':
         cur.execute("""
-                  DELETE FROM Clients WHERE id="%s";
-                  """, (id))
-        return cur.fetchone()[0]
+                              UPDATE Clients SET first_name=%s WHERE id=%s;
+                              """, (name, id))
+        s += ' новое имя: '+(name)
+    if telnum != '':
+        cur.execute("""
+                              UPDATE telephones SET telephone_num=%s WHERE client_id=%s;
+                              """, (telnum, id))
+        s += ' новый номер телефон: '+(telnum)
 
-def find_user(conn,  name: str, lastname: str, email: str, tel_num: str) -> int:
-    with conn.cursor() as cur:
-        if tel_num != '':
-            cur.execute("""
-              SELECT id FROM Clients WHERE first_name="%s" and last_name="%s" or email="%s";
-              """, (name, lastname, email))
-        else:
-            cur.execute("""
-                  SELECT c.id FROM Clients c 
-                  join telephones t on t.client_id==c.id 
-                  WHERE t.telephone_num="%s";
-                  """, (tel_num))
-        return cur.fetchone()
+    return s
+
+def del_telephone(cur, id: int) -> int:
+    cur.execute("""
+              DELETE FROM telephones WHERE client_id=%s;
+              """, (id,))
+
+    return id
+
+
+def del_user(cur, id) -> int:
+    cur.execute("""
+              DELETE FROM telephones WHERE client_id=%s;
+              """, (id,))
+
+    cur.execute("""
+                  DELETE FROM Clients WHERE id=%s;
+                  """, (id,))
+    return id
+
+def find_user(cur,  table='', name='', lastname='', email='', tel_num='') -> int:
+
+    # cursor.execute("SELECT admin FROM users WHERE username = %s'", (username,));
+    # cursor.execute("SELECT admin FROM users WHERE username = %(username)s", {'username': username});
+    if tel_num != '':
+         #cur.execute("SELECT first_name FROM Clients WHERE last_name = %s", (lastname,));
+         cur.execute("SELECT c.id FROM clients c join telephones t on t.client_id=c.id WHERE t.telephone_num= %s", (tel_num,));
+
+    elif lastname != '':
+        cur.execute("SELECT first_name FROM Clients WHERE last_name = %s", (lastname,));
+    elif email != '':
+        cur.execute("SELECT first_name FROM Clients WHERE email = %s", (email,));
+    else:
+        cur.execute("SELECT first_name FROM Clients WHERE first_name = %s", (name,));
+
+        # cur.execute("""
+        # SELECT id FROM Clients WHERE first_name="%s" and last_name="%s" or email="%s";
+        # """, (name, lastname, email))
+    return cur.fetchall()
 
 if __name__ == '__main__':
 
@@ -113,30 +171,51 @@ if __name__ == '__main__':
     user_my = config["Passwords"]["User"]
 
     with psycopg2.connect(database="postgres", user=user_my, password=password_my) as conn:
-        python_id = create_table(conn, "Clients")
-        print('Clients_id', python_id)
-        conn.commit()
+        with conn.cursor() as cur:
 
-    #    python_id = create_user(conn, "Ivan", "Petrov", "test@test.ru", "+79111234567")
-        python_id = create_user(conn, 1, 2, 3, 4)
+            python_id = create_table(cur, 'Clients')
+            print('Clients_id', python_id)
+            conn.commit()
 
-        print('Clients_insert', python_id)
-        conn.commit()
+            id = create_user(cur, 'Ivan', 'Petrov', 'test@test.ru', '+79111234567')
+     #   python_id = create_user(conn, 1, 2, 3, 4)
 
-        python_id = add_tel_num(conn, 1, '+79123333333')
-        print('add_tel_num', python_id)
+            print('Clients_insert', id)
+            conn.commit()
 
-        python_id = change_data(conn, 1, 'example@mail.ru')
-        print('change_data', python_id)
+            python_id = add_tel_num(cur, id, '+79123333334')
+            print('add_tel_num', python_id)
+            conn.commit()
 
-        python_id = del_telephone(conn, 1)
-        print('del_telephone', python_id)
+            python_id = change_data(cur, 4, 'Ivan', 'Petrov', 'example@mail.ru','+79123333334')
+            print('change_data', python_id)
+            python_id = change_data(cur, 5, name='Sveta')
+            print('change_data', python_id)
+            python_id = change_data(cur, 5, lastname='Smirnova')
+            print('change_data', python_id)
+            python_id = change_data(cur, 5, email='primer@primer.ru')
+            print('change_data', python_id)
+            python_id = change_data(cur, 5, telnum='+79158887766')
+            print('change_data', python_id)
+            #
+        #
+            python_id = del_telephone(cur, 33)
+            print('del_telephone', python_id)
 
-        python_id = find_user(conn, '+79123333333')
-        print('find_user', python_id)
+            python_id = find_user(cur, 'clients', 'Ivan', 'Petrov', '33','+79123333334')
+            print('find_user', python_id)
+            python_id = find_user(cur, tel_num='+79123333334')
+            print('find_user', python_id)
+            python_id = find_user(cur, name='Ivan')
+            print('find_user', python_id)
+            python_id = find_user(cur, lastname='Dmitrov')
+            print('find_user', python_id)
+            python_id = find_user(cur, email='1@1.ru')
+            print('find_user', python_id)
 
-        python_id = del_user(conn, 10)
-        print('del_user', python_id)
+            python_id = del_user(cur, 3)
+            print('del_user', python_id)
+            conn.commit()
 
 
 
